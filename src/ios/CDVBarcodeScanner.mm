@@ -28,6 +28,14 @@
 //------------------------------------------------------------------------------
 #define USE_SHUTTER 0
 
+
+//--------------------------------------------------------------------------
+
+#define RETICLE_SIZE    500.0f
+#define RETICLE_WIDTH    10.0f
+#define RETICLE_OFFSET   60.0f
+#define RETICLE_ALPHA     0.4f
+
 //------------------------------------------------------------------------------
 @class CDVbcsProcessor;
 @class CDVbcsViewController;
@@ -374,7 +382,10 @@ parentViewController:(UIViewController*)parentViewController
     AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
     [device lockForConfiguration:nil];
     if([device isAutoFocusRangeRestrictionSupported]) {
+        Float64 lens = [device lensPosition];
+        [[NSUserDefaults standardUserDefaults] setFloat:lens forKey:@"LENS_VALUE"];
         [device setAutoFocusRangeRestriction:AVCaptureAutoFocusRangeRestrictionNone];
+        NSLog(@"Lens value %f stored", lens);
     }
     [device unlockForConfiguration];
 
@@ -484,7 +495,11 @@ parentViewController:(UIViewController*)parentViewController
        AVCaptureDevice* __block device = nil;
     if (self.isFrontCamera) {
 
-        NSArray* devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+        AVCaptureDeviceDiscoverySession *caputerDeviceSession = [AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeBuiltInWideAngleCamera] mediaType:AVMediaTypeVideo position:AVCaptureDevicePositionBack];
+        
+//        NSArray* devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+        NSArray* devices = [caputerDeviceSession devices];
+        
         [devices enumerateObjectsUsingBlock:^(AVCaptureDevice *obj, NSUInteger idx, BOOL *stop) {
             if (obj.position == AVCaptureDevicePositionFront) {
                 device = obj;
@@ -499,11 +514,24 @@ parentViewController:(UIViewController*)parentViewController
     // set focus params if available to improve focusing
     [device lockForConfiguration:&error];
     if (error == nil) {
+        
+        Float64 lens = [[NSUserDefaults standardUserDefaults] floatForKey:@"LENS_VALUE"];
+        if(lens > 0 && lens < 1) {
+            [device setFocusModeLockedWithLensPosition:lens completionHandler:^(CMTime syncTime) {
+                NSLog(@"Lens restore va lue = %f", lens);
+            }];
+        }
+        
         if([device isFocusModeSupported:AVCaptureFocusModeContinuousAutoFocus]) {
             [device setFocusMode:AVCaptureFocusModeContinuousAutoFocus];
         }
         if([device isAutoFocusRangeRestrictionSupported]) {
-            [device setAutoFocusRangeRestriction:AVCaptureAutoFocusRangeRestrictionNear];
+            
+            float width = UIScreen.mainScreen.bounds.size.width;
+            float height = UIScreen.mainScreen.bounds.size.height;
+            CGPoint points = CGPointMake(width/2, height/2);
+            [device setFocusPointOfInterest:points];
+//            [device setAutoFocusRangeRestriction:AVCaptureAutoFocusRangeRestrictionNear];
         }
     }
     [device unlockForConfiguration];
@@ -950,12 +978,6 @@ parentViewController:(UIViewController*)parentViewController
     return overlayView;
 }
 
-//--------------------------------------------------------------------------
-
-#define RETICLE_SIZE    500.0f
-#define RETICLE_WIDTH    10.0f
-#define RETICLE_OFFSET   60.0f
-#define RETICLE_ALPHA     0.4f
 
 //-------------------------------------------------------------------------
 // builds the green box and red line
